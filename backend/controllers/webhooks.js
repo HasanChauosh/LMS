@@ -52,59 +52,57 @@ export const clerkWebhooks = async (req, res) => {
 }
 
 export const stripeWebhooks = async (req, res) => {
-    // Lazily create the Stripe instance here so process.env is populated
     const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
-
     const sig = req.headers["stripe-signature"];
     let event;
+
     try {
-        // Use the Stripe constructor's static helper to validate the webhook signature
         event = Stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
     } catch (error) {
         return res.status(400).send(`Webhook Error: ${error.message}`);
     }
 
-    switch (event.type) {
-        case 'payment_intent.succeeded':{
-            const paymentIntent = event.data.object;
-            const paymentIntentId = paymentIntent.id;
-            const session = await stripeInstance.checkout.sessions.list({
-                payment_intent: paymentIntentId,
-                limit: 1,
-            });
-            const {purchaseId} = session.data[0].metadata;
+    // Recommended: Use checkout.session.completed for easier fulfillment logic
+    if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        const { purchaseId } = session.metadata;
+
+        try {
             const purchaseData = await Purchase.findById(purchaseId);
-            const userData = await User.findById(purchaseData.userID);
-            const courseData = await Course.findById(purchaseData.courseId.toString());
+            if (purchaseData && purchaseData.status !== 'completed') {
+                
+                // Fetch User and Course using correct CASE-SENSITIVE fields
+                const userData = await User.findById(purchaseData.UserID);
+                const courseData = await Course.findById(purchaseData.CourseID);
 
-            courseData.enrolledStudents.push(userData);
-            await courseData.save();
+                if (userData && courseData) {
+                    // Update Course: Add User ID to enrolledStudents
+                    courseData.enrolledStudents.push(userData._id);
+                    await courseData.save();
 
-            userData.enrolledCourses.push(courseData._id);
-            await userData.save();
+                    // Update User: Add Course ID to enrolledCourses
+                    userData.enrolledCourses.push(courseData._id);
+                    await userData.save();
 
-            purchaseData.status =" completed";
-            await purchaseData.save();
-
-
-            break;}
-        case 'payment_intent.payment_failed':{
-            const paymentIntent = event.data.object;
-            const paymentIntentId = paymentIntent.id;
-            const session = await stripeInstance.checkout.sessions.list({
-                payment_intent: paymentIntentId,
-                limit: 1,
-            });
-            const {purchaseId} = session.data[0].metadata;
-            const purchaseData = await Purchase.findById(purchaseId);
-            purchaseData.status = "failed";
-            await purchaseData.save();
-
-            
-            break;}
-        default:
-            console.log(`Unhandled event type ${event.type}`);
+                    // Update Purchase Status
+                    purchaseData.status = 'completed';
+                    await purchaseData.save();
+                }
+            }
+        } catch (err) {
+            console.error('Fulfillment Error:', err.message);
+            return res.status(500).json({ success: false, message: "Internal Server Error" });
+        }
     }
-    // Return a 200 response to acknowledge receipt of the event
+
+    // Handle failed payments
+    if (event.type === 'checkout.session.expired' || event.type === 'payment_intent.payment_failed') {
+        const session = event.data.object;
+        const { purchaseId } = session.metadata || {};
+        if (purchaseId) {
+            await Purchase.findByIdAndUpdate(purchaseId, { status: 'failed' });
+        }
+    }
+
     res.json({ received: true });
 }
