@@ -15,6 +15,10 @@ const app = express()
 
 // Middleware Order Matters!
 app.use(cors())
+
+// Stripe webhook needs the raw body to verify the signature so parese before other middlewares since it has secret key verification(encrptying )
+app.post('/stripe',express.raw({type:'application/json'}),stripeWebhooks)
+
 app.use(express.json()) // Must be global
 app.use(clerkMiddleware()) // Must come after json
 
@@ -35,7 +39,6 @@ app.post('/clerk', clerkWebhooks)
 app.use('/api/educator', educatorRouter)
 app.use('/api/course', courseRouter)
 app.use('/api/user', userRouter)
-app.post('/stripe',express.raw({type:'application/json'}),stripeWebhooks)
 //exprss.raw is used to parse the raw body for stripe webhook verification and application/json is the content type
 
 const PORT = process.env.PORT || 5000
