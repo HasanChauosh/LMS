@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import uniqid from 'uniqid';
+// use a browser-safe id generator
+import { nanoid } from 'nanoid';
 import Quill from 'quill';
 import 'quill/dist/quill.snow.css'; 
 import { assets } from '../../assets/assets';
@@ -37,7 +38,7 @@ const AddCourse = () => {
       const title = prompt('Enter Chapter Name:');
       if (title) {
         const newChapter = {
-          chapterId: uniqid(),
+          chapterId: nanoid(),
           chapterTitle: title,
           chapterContent: [],
           collapsed: false,
