@@ -33,12 +33,12 @@ connectDB()
 await connectCloudinary()
 
 app.get('/', (req, res) => res.send('API is running'))
-app.post('/clerk', clerkWebhooks)
+app.post('/clerk', express.json(),clerkWebhooks)
 
 // Simplified Routes
-app.use('/api/educator', educatorRouter)
-app.use('/api/course', courseRouter)
-app.use('/api/user', userRouter)
+app.use('/api/educator',express.json(), educatorRouter)
+app.use('/api/course',express.json(), courseRouter)
+app.use('/api/user',express.json(), userRouter)
 //exprss.raw is used to parse the raw body for stripe webhook verification and application/json is the content type
 
 const PORT = process.env.PORT || 5000
