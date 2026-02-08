@@ -1,6 +1,6 @@
 // server.js
+import 'dotenv/config'
 import express from 'express'
-import dotenv from 'dotenv'
 import cors from 'cors'
 import connectDB from './configs/mongodb.js'
 import { clerkWebhooks, stripeWebhooks } from './controllers/webhooks.js'
@@ -10,7 +10,6 @@ import connectCloudinary from './configs/cloudinary.js'
 import courseRouter from './routes/courseRoute.js'
 import userRouter from './routes/userRoutes.js'
 
-dotenv.config()
 const app = express()
 
 // Middleware Order Matters!
