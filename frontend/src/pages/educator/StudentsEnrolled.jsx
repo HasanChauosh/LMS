@@ -1,20 +1,45 @@
 import React, { useState, useEffect } from 'react'
-import { dummyStudentEnrolled } from '../../assets/assets'
 import Loading from '../../components/student/Loading'
+import AppContext from '../../context/AppContext'
+import { useContext } from 'react'
 
 const StudentsEnrolled = () => {
+  const { backendURL, getToken, isEducator } = useContext(AppContext)
   const [enrolledStudents, setEnrolledStudents] = useState([])
+  const [loading, setLoading] = useState(true)
   
   const fetchEnrolledStudents = async () => {
-    // Simulating API call
-    setEnrolledStudents(dummyStudentEnrolled)
+    try {
+      setLoading(true)
+      const token = await getToken()
+      const data = await fetch(backendURL + '/api/educator/enrolled-students', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+      const result = await data.json()
+      if (result.success) {
+        setEnrolledStudents(result.enrolledStudentsWithPurchases || result.students || [])
+      } else {
+        setEnrolledStudents([])
+      }
+    } catch (error) {
+      console.error('Error fetching enrolled students:', error)
+      setEnrolledStudents([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
-    fetchEnrolledStudents()
-  }, [])
+    if(isEducator) {
+      fetchEnrolledStudents()
+    }
+  }, [isEducator])
 
-  return enrolledStudents.length > 0 ? (
+  if (loading) return <Loading />
+
+  return (
     <div className='min-h-screen bg-[#f8fafc] p-4 md:p-10 lg:p-12'>
       
       {/* Page Header */}
@@ -77,13 +102,18 @@ const StudentsEnrolled = () => {
 
                 </tr>
               ))}
+              {enrolledStudents.length === 0 && (
+                <tr>
+                  <td className="px-8 py-10 text-gray-500" colSpan={4}>
+                    No students enrolled yet.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
     </div>
-  ) : (
-    <Loading />
   )
 }
 

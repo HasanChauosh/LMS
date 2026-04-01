@@ -114,7 +114,7 @@ export const getEnrolledStudentsWithPurchases = async(req,res)=>{
         
         const courseIds= courses.map((course)=>course._id);
         const purchases = await Purchase.find({
-            courseId: { $in: courseIds },
+            CourseID: { $in: courseIds },
             status: 'completed'
         }).populate('UserID','name imageUrl').populate('CourseID','courseTitle');
 

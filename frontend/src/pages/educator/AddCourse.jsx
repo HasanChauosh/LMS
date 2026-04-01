@@ -4,8 +4,13 @@ import { nanoid } from 'nanoid';
 import Quill from 'quill';
 import 'quill/dist/quill.snow.css'; 
 import { assets } from '../../assets/assets';
+import { useContext } from 'react';
+import AppContext from '../../context/AppContext';
+import axios from 'axios';
+import { toast } from 'react-toastify';
 
 const AddCourse = () => {
+  const { backendURL ,getToken} = useContext(AppContext);
   const quillRef = useRef();
   const editorRef = useRef();
 
@@ -14,6 +19,7 @@ const AddCourse = () => {
   const [discount, setDiscount] = useState('');
   const [image, setImage] = useState('');
   const [chapters, setChapters] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   const [currentChapterId, setCurrentChapterId] = useState('');
   const [lectureDetails, setLectureDetails] = useState({ 
@@ -55,11 +61,14 @@ const AddCourse = () => {
 
   const handleAddLecture = () => {
     if (!currentChapterId) return;
+    const chapter = chapters.find(ch => ch.chapterId === currentChapterId);
     const newLecture = {
+      lectureId: nanoid(),
       lectureTitle: lectureDetails.lectureTitle || 'Untitled Lecture',
       lectureDuration: lectureDetails.lectureDuration || 0,
       lectureUrl: lectureDetails.lectureUrl || '#',
       isPreviewFree: !!lectureDetails.isPreviewFree,
+      lectureOrder: chapter ? chapter.chapterContent.length + 1 : 1,
     };
 
     setChapters(prev => prev.map(ch => {
@@ -74,6 +83,80 @@ const AddCourse = () => {
     setShowPopup(false);
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
+    try {
+      if (!image) {
+        toast.error('Please upload a thumbnail image');
+        return;
+      }
+
+      if (!courseTitle.trim()) {
+        toast.error('Please add course title');
+        return;
+      }
+
+      if (!chapters.length) {
+        toast.error('Please add at least one chapter');
+        return;
+      }
+
+      const courseDescription = quillRef.current?.root?.innerHTML || '';
+
+      const courseData = {
+        courseTitle: courseTitle.trim(),
+        courseDescription,
+        coursePrice: Number(coursePrice) || 0,
+        discount: Number(discount) || 0,
+        courseContent: chapters.map((chapter, chapterIndex) => ({
+          chapterId: chapter.chapterId,
+          chapterTitle: chapter.chapterTitle,
+          chapterOrder: chapter.chapterOrder || chapterIndex + 1,
+          chapterContent: chapter.chapterContent.map((lecture, lectureIndex) => ({
+            lectureId: lecture.lectureId || nanoid(),
+            lectureTitle: lecture.lectureTitle,
+            lectureDuration: Number(lecture.lectureDuration) || 0,
+            lectureUrl: lecture.lectureUrl,
+            isPreviewFree: !!lecture.isPreviewFree,
+            lectureOrder: lecture.lectureOrder || lectureIndex + 1,
+          })),
+        })),
+      };
+
+      const formData = new FormData();
+      formData.append('image', image);
+      formData.append('courseData', JSON.stringify(courseData));
+
+      const token = await getToken();
+      const { data } = await axios.post(backendURL + '/api/educator/add-course', formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (data.success) {
+        toast.success(data.message || 'Course published successfully');
+        setCourseTitle('');
+        setCoursePrice('');
+        setDiscount('');
+        setImage('');
+        setChapters([]);
+        if (quillRef.current?.root) {
+          quillRef.current.root.innerHTML = '';
+        }
+      } else {
+        toast.error(data.message || 'Failed to publish course');
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to publish course');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className='min-h-screen bg-gray-50 p-4 md:p-8'>
       <div className='max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-10'>
@@ -84,7 +167,7 @@ const AddCourse = () => {
           <p className='text-gray-500 mt-1'>Fill in the details below to launch your course.</p>
         </div>
 
-        <form onSubmit={(e) => e.preventDefault()} className='space-y-8'>
+        <form onSubmit={handleSubmit} className='space-y-8'>
           
           {/* Title - Balanced xl size */}
           <div className="space-y-2">
@@ -214,8 +297,12 @@ const AddCourse = () => {
 
           {/* Submit Button */}
           <div className='pt-8'>
-            <button type='submit' className='w-full bg-blue-600 text-white py-4 rounded-xl text-xl font-bold shadow-lg hover:bg-blue-700 transition-all'>
-              PUBLISH COURSE
+            <button
+              type='submit'
+              disabled={isSubmitting}
+              className='w-full bg-blue-600 disabled:bg-blue-400 disabled:cursor-not-allowed text-white py-4 rounded-xl text-xl font-bold shadow-lg hover:bg-blue-700 transition-all'
+            >
+              {isSubmitting ? 'PUBLISHING...' : 'PUBLISH COURSE'}
             </button>
           </div>
         </form>

@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import Course from "../models/Course.js";
 import { Purchase } from "../models/Purchase.js";
+import { CourseProgress } from "../models/CourseProgress.js";
 import Stripe from "stripe";
 import { getAuth } from "@clerk/express";
 
@@ -30,6 +31,7 @@ export const userEnrolledCourses = async (req, res) => {
         if (!userData) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
+        console.log('[DEBUG] Enrolled courses for user:', userId, '| Count:', userData.enrolledCourses?.length || 0);
         return res.json({ success: true, courses: userData.enrolledCourses });
     } catch (error) {
         console.error('userEnrolledCourses error:', error);
@@ -109,12 +111,15 @@ export const purchaseCourses = async (req, res) => {
 
 export const updateUserCourseProgress = async (req, res) => {
     try {
-        const userId = req.auth.userId;
+        const { userId } = getAuth(req);
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
         const { courseId, lectureId } = req.body;
         const progressData = await CourseProgress.findOne({ userId, courseId });
         if (progressData) {
             //check if the lecture is already marked as completed
-            if (progressData.lecutureCompleted.includes(lectureId)) {
+            if (progressData.lectureCompleted.includes(lectureId)) {
                 return res.json({ success: true, message: "Lecture already marked as completed" })
             }
 
@@ -136,20 +141,27 @@ export const updateUserCourseProgress = async (req, res) => {
 
 export const getUserCourseProgress = async (req, res) => {
     try {
-        const userId = req.auth.userId;
-        const { courseId } = req.body;
-        const progressData = await CourseProgress.findOne({ userId, courseId });
+        const { userId } = getAuth(req) || {};
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+        const { courseId } = req.body || {};
+        if (!courseId) {
+            return res.json({ success: true, progressData: null });
+        }
+
+        const progressData = await CourseProgress.findOne({ userId, courseId: String(courseId) });
         res.json({ success: true, progressData })
     } catch (error) {
         console.error('getUserCourseProgress error:', error);
-        res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+        res.json({ success: true, progressData: null });
     }
 }
 
 //add user ratings to courses
 
 export const addUserRating = async (req, res) => {
-    const userId = req.auth.userId;
+    const { userId } = getAuth(req);
     const { courseId, rating } = req.body;
     if (!courseId || !userId || !rating || rating < 1 || rating > 5) {
         return res.status(400).json({ success: false, message: "Invalid input" })
@@ -159,7 +171,7 @@ export const addUserRating = async (req, res) => {
         if (!courseData) {
             return res.status(404).json({ success: false, message: "Course not found" })
         }
-        const user = await User.findById(userId);
+        const user = await User.findOne({ _id: userId });
         if (!user || !user.enrolledCourses.includes(courseId)) {
             return res.status(404).json({ success: false, message: "User not enrolled in this course" })
         }

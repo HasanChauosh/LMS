@@ -1,18 +1,36 @@
 import React, { useContext, useState, useEffect } from 'react'
 import AppContext from '../../context/AppContext'
 import Loading from '../../components/student/Loading'
+import axios from 'axios'
 
 const MyCourses = () => {
   const [courses, setCourses] = useState(null)
-  const { currency, allCourses } = useContext(AppContext)
+  const { currency, backendURL,isEducator,getToken } = useContext(AppContext)
 
   const fetchEducatorCourses = async () => {
-    setCourses(allCourses)
+    try {
+      const token = await getToken()
+      const {data} = await axios.get(backendURL + '/api/educator/courses', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+      if (data.success) {
+        setCourses(data.courses || [])
+      } else {
+        setCourses([])
+      }
+    } catch (error) {
+      console.error('Error fetching educator courses:', error)
+      setCourses([])
+    }
   }
 
   useEffect(() => {
-    fetchEducatorCourses()
-  }, [allCourses])
+    if(isEducator) {
+      fetchEducatorCourses()
+    }
+  }, [isEducator])
 
   return courses ? (
     <div className='min-h-screen bg-[#f8fafc] p-4 md:p-10 lg:p-12'>

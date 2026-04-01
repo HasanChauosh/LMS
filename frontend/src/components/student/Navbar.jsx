@@ -4,6 +4,9 @@ import { Link, useLocation } from 'react-router-dom'
 import { useClerk, UserButton, useUser } from '@clerk/clerk-react'
 import { useContext } from 'react'
 import  AppContext  from '../../context/AppContext'
+import axios from 'axios'
+import { toast } from 'react-toastify'
+
 
 
 const Navbar = () => {
@@ -12,7 +15,26 @@ const Navbar = () => {
 
   const { openSignUp } = useClerk()
   const { isSignedIn } = useUser()
-  const { navigate, isEducator, setIsEducator } = useContext(AppContext)
+  const { navigate, isEducator,backendURL,setIsEducator,getToken } = useContext(AppContext)
+
+  const becomeEducator = async ()=>{
+    try {
+      if(isEducator) {
+        navigate('/educator')
+        return
+      }
+      const token = await getToken()
+      const { data} = await axios.get(backendURL + '/api/educator/update-role',{headers:{Authorization:`Bearer ${token}`}})
+      if(data.success){
+        setIsEducator(true)
+        toast.success(data.message)
+      }else{
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error('An error occurred while updating role.')
+    }
+  }
 
   return (
     <div
@@ -37,8 +59,7 @@ const Navbar = () => {
           <div className="flex items-center gap-8"> {/* Increased gap between links */}
             
             {/* Educator Link: Made text larger (text-xl), bold, and interactive */}
-            <button 
-              onClick={() => { navigate('/educator') }} 
+            <button onClick={becomeEducator} 
               className="text-xl font-semibold hover:text-blue-600 transition duration-300"
             >
               {isEducator ? 'Educator Dashboard' : 'Become Educator'}
@@ -81,7 +102,7 @@ const Navbar = () => {
 
         {isSignedIn && (
           <div className="flex items-center gap-6">
-            <button onClick={() => { navigate('/educator') }} className="text-lg font-medium">
+            <button onClick={becomeEducator} className="text-lg font-medium">
               {isEducator ? 'Educator Dashboard' : 'Become Educator'}
             </button>
 

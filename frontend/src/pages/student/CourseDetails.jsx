@@ -6,11 +6,14 @@ import Loading from '../../components/student/Loading'
 import { assets } from '../../assets/assets'
 import humanizeDuration from 'humanize-duration'
 import Footer from '../../components/student/Footer'
+import axios from 'axios'
+import { toast } from 'react-toastify'
 
 const CourseDetails = () => {
   const { id } = useParams();
   const [courseData, setCourseData] = React.useState(null);
   const [openSections, setOpenSections] = React.useState([]);
+  const [isAlreadyEnrolled, setIsAlreadyEnrolled] = React.useState(false);
   const {
     allCourses,
     calculateCourseRating,
@@ -18,20 +21,68 @@ const CourseDetails = () => {
     currency,
     calculateCourseDuration,
     calculateTotalLectures,
+    backendURL,
+    getToken,
+    navigate,
+    userData,
+    
+
   } = useContext(AppContext);
 
-  const fetchCourseData = async () => {
-    if (!allCourses || allCourses.length === 0) {
-      setCourseData(null);
-      return;
+  const handlePurchase = async () => {
+    try {
+      const token = await getToken();
+      const { data } = await axios.post(
+        backendURL + '/api/user/purchase',
+        { courseId: id },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (data.success && data.session_url) {
+        window.location.href = data.session_url;
+      } else {
+        toast.error(data.message || 'Failed to initiate purchase');
+      }
+    } catch (error) {
+      console.error('Purchase error:', error);
+      toast.error(error.response?.data?.message || error.message);
     }
-    const findcourse = allCourses.find((course) => String(course._id) === String(id));
-    setCourseData(findcourse || null);
+  };
+
+  const handlePreview = (lectureUrl) => {
+    if (lectureUrl) {
+      navigate('/player/' + id + '?preview=' + encodeURIComponent(lectureUrl));
+    } else {
+      toast.error('Preview not available');
+    }
+  };
+
+
+
+  const fetchCourseData = async () => {
+    try {
+      const { data } = await axios.get(backendURL + '/api/course/' + id);
+      if (data.success) {
+        setCourseData(data.courseData);
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      console.error('fetchCourseData error:', error);
+      toast.error(error.message);
+    }
   };
 
   React.useEffect(() => {
-    fetchCourseData();
-  }, [id, allCourses]);
+    if (id) {
+      fetchCourseData();
+    }
+  }, [id]);
+
+  React.useEffect(() => {
+    if (userData && courseData) {
+      setIsAlreadyEnrolled(userData.enrolledCourses?.includes(courseData._id));
+    }
+  }, [userData, courseData]);
 
   const toggleSection = (index) => {
     setOpenSections((prev) => {
@@ -98,7 +149,7 @@ const CourseDetails = () => {
           <p className="mt-4 text-2xl md:text-xl">
             Course by{' '}
             <span className="font-bold text-2xl text-blue-800 underline cursor-pointer">
-              ApexLearn
+              {courseData.educator.name}
             </span>
           </p>
 
@@ -155,7 +206,9 @@ const CourseDetails = () => {
                             </div>
                             <div className="flex items-center gap-4 text-sm md:text-lg">
                               {lecture.isPreviewFree && (
-                                <span className="text-blue-600 font-bold cursor-pointer hover:underline">
+                                <span 
+                                  onClick={() => handlePreview(lecture.lectureUrl)}
+                                  className="text-blue-600 font-bold cursor-pointer hover:underline">
                                   Preview
                                 </span>
                               )}
@@ -267,8 +320,12 @@ const CourseDetails = () => {
                   </div>
                 </div>
 
-                <button className="w-full py-5 bg-blue-600 hover:bg-blue-700 text-xl md:text-2xl text-white font-bold rounded-lg shadow-lg transition-all mb-8">
-                  Enroll Now
+                <button 
+                  onClick={() =>
+                    isAlreadyEnrolled ? navigate('/my-enrollments') : handlePurchase()
+                  }
+                  className="w-full py-5 bg-blue-600 hover:bg-blue-700 text-xl md:text-2xl text-white font-bold rounded-lg shadow-lg transition-all mb-8">
+                  {isAlreadyEnrolled ? 'Go to My Enrollments' : 'Enroll Now'}
                 </button>
 
                 <div className="pt-6">

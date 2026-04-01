@@ -8,9 +8,7 @@ const Rating = ({initialRating,onRate}) => {
   }
 
   useEffect(()=>{
-    if(initialRating){
-      setRating(initialRating)
-    }
+    setRating(initialRating || 0)
   },[initialRating])
   return (
     <div>

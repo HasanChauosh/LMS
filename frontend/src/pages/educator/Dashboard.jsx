@@ -1,20 +1,39 @@
 import React, { useContext, useState, useEffect } from 'react'
 import AppContext from '../../context/AppContext'
-import { assets, dummyDashboardData } from '../../assets/assets'
+import { assets } from '../../assets/assets'
 import Loading from '../../components/student/Loading'
+import { toast } from 'react-toastify'
+import axios from 'axios'
 
 const Dashboard = () => {
-  const { currency } = useContext(AppContext)
+  const { currency,backendURL,getToken,isEducator } = useContext(AppContext)
   const [dashboardData, setDashboardData] = useState(null)
 
   const fetchDashboardData = async () => {
-    // Simulating API call
-    setDashboardData(dummyDashboardData)
+    try {
+      const token = await getToken()
+      const { data } = await axios.get(backendURL + '/api/educator/dashboard', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+      if (data.success) {
+        setDashboardData(data.dashboardData)
+      }else {
+        toast.error(data.message || 'Failed to fetch dashboard data. Please try again later.')
+      }
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error)
+      toast.error('An error occurred while fetching dashboard data. Please try again later.')
+    }
   }
 
   useEffect(() => {
+    if(isEducator){
     fetchDashboardData()
-  }, [])
+    }
+  }, [isEducator])
 
   return dashboardData ? (
     <div className='min-h-screen bg-[#f8fafc] p-4 md:p-10 lg:p-12'>
@@ -91,12 +110,12 @@ const Dashboard = () => {
 
                   <td className="px-8 py-6 flex items-center gap-4">
                     <img
-                      src={item.student.imageUrl}
+                      src={item.student?.imageUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(item.student?.name || item.studentName || 'Student')}
                       alt="Profile"
                       className="w-12 h-12 rounded-full object-cover shadow-sm"
                     />
                     <span className="font-bold text-gray-800 text-lg md:text-xl">
-                      {item.student.name}
+                      {item.student?.name || item.studentName}
                     </span>
                   </td>
 

@@ -14,7 +14,7 @@ const CourseCard = ({ course }) => {
 
       <div className='p-4 space-y-2 text-left'>
         <h3 className='text-lg font-semibold'>{course.courseTitle}</h3>
-        <p className='text-gray-600'>ApexLearn</p>
+        <p className='text-gray-600'>{course.educator.name}</p>
 
         <div className='flex items-center space-x-2'>
           <p>{rating}</p>
