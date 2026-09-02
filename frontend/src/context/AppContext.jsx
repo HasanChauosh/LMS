@@ -22,6 +22,7 @@ export const AppContextProvider = (props) => {
     const [isEducator, setIsEducator] = useState(false);
     const [enrolledCourses, setEnrolledCourses] = useState([]);
     const [userData, setUserData] = useState(null);
+    const [accountStatus, setAccountStatus] = useState('loading');
     //fech all courses from backend
     const fetchAllCourses = async () => {
         try {
@@ -51,18 +52,25 @@ export const AppContextProvider = (props) => {
             });
             if (data.success) {
                 setUserData(data.user);
+                setAccountStatus('ready');
             } else {
-                toast.error(data.message);
+                setUserData(null);
+                setAccountStatus('missing');
             }
         }
         catch (error) {
-            toast.error(error.message);
+            const status = error?.response?.status;
+            setUserData(null);
+            setAccountStatus(status === 401 || status === 404 ? 'missing' : 'error');
+            if (status !== 401 && status !== 404) {
+                toast.error(error.message);
+            }
         }
     }
 
     //function to cal all rating of the course
     const calculateCourseRating = (course) => {
-        if (!course.courseRatings || course.courseRatings.length === 0) return 0;
+        if (!course || !Array.isArray(course.courseRatings) || course.courseRatings.length === 0) return 0;
 
         let totalRating = 0;
 
@@ -107,7 +115,7 @@ export const AppContextProvider = (props) => {
     //fetch User enrolled courses
     const fetchUserEnrolledCourses = async () => {
         //fetch from backend
-        if (!user) return; // Don't fetch if user is not logged in
+        if (!user || accountStatus !== 'ready') return; // Don't fetch until the account is synced
         try {
             const token = await getToken();
             const { data } = await axios.get(backendURL + '/api/user/enrolled-courses', {
@@ -118,11 +126,14 @@ export const AppContextProvider = (props) => {
             if (data.success) {
                 setEnrolledCourses(data.courses.reverse());
             } else {
-                toast.error(data.message);
+                setEnrolledCourses([]);
             }
         } catch (error) {
             console.error('fetchUserEnrolledCourses error:', error);
-            toast.error(error.message);
+            const status = error?.response?.status;
+            if (status !== 401 && status !== 404) {
+                toast.error(error.message);
+            }
         }
     }
 
@@ -134,12 +145,17 @@ export const AppContextProvider = (props) => {
     useEffect(() => {
         if (user) {
             fetchUserData();
-            fetchUserEnrolledCourses();
         }
     }, [user])
+
+    useEffect(() => {
+        if (user && accountStatus === 'ready') {
+            fetchUserEnrolledCourses();
+        }
+    }, [user, accountStatus]);
     const value = {
         currency, allCourses, navigate, calculateCourseRating, isEducator, setIsEducator, calculateChapterTime,
-        calculateCourseDuration, calculateTotalLectures, enrolledCourses, fetchUserEnrolledCourses, userData, fetchUserData, backendURL, getToken, setUserData
+        calculateCourseDuration, calculateTotalLectures, enrolledCourses, fetchUserEnrolledCourses, userData, fetchUserData, backendURL, getToken, setUserData, accountStatus
     };
     return (
         <AppContext.Provider value={value}>

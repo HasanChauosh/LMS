@@ -25,6 +25,7 @@ const CourseDetails = () => {
     getToken,
     navigate,
     userData,
+    accountStatus,
     
 
   } = useContext(AppContext);
@@ -93,6 +94,11 @@ const CourseDetails = () => {
 
   return courseData ? (
     <>
+      {accountStatus === 'missing' && (
+        <div className='mx-8 lg:mx-20 mt-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900'>
+          Your account is not synced yet, so enrollments and progress may not load until your Mongo user profile exists.
+        </div>
+      )}
       {/* LAYOUT UPDATE: 
           - Changed to a simple flex container.
           - No justify-between. We will control position with column widths. 
@@ -139,17 +145,17 @@ const CourseDetails = () => {
             </div>
 
             <p className="text-blue-600 font-medium underline text-lg md:text-xl">
-              ({courseData.courseRatings.length} Ratings)
+              ({Array.isArray(courseData.courseRatings) ? courseData.courseRatings.length : 0} Ratings)
             </p>
             <p className="text-gray-500 text-lg md:text-xl">
-              {courseData.enrolledStudents.length} Students
+              {Array.isArray(courseData.enrolledStudents) ? courseData.enrolledStudents.length : 0} Students
             </p>
           </div>
 
           <p className="mt-4 text-2xl md:text-xl">
             Course by{' '}
             <span className="font-bold text-2xl text-blue-800 underline cursor-pointer">
-              {courseData.educator.name}
+              {courseData.educator?.name || 'Unknown educator'}
             </span>
           </p>
 

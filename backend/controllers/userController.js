@@ -3,7 +3,29 @@ import Course from "../models/Course.js";
 import { Purchase } from "../models/Purchase.js";
 import { CourseProgress } from "../models/CourseProgress.js";
 import Stripe from "stripe";
-import { getAuth } from "@clerk/express";
+import { clerkClient, getAuth } from "@clerk/express";
+
+const syncUserFromClerk = async (userId) => {
+    let user = await User.findById(userId);
+    if (user) {
+        return user;
+    }
+
+    const clerkUser = await clerkClient.users.getUser(userId);
+    const email = clerkUser.emailAddresses?.[0]?.emailAddress;
+    if (!email) {
+        throw new Error('Clerk user does not have an email address');
+    }
+
+    const userData = {
+        _id: userId,
+        name: `${clerkUser.firstName || ''} ${clerkUser.lastName || ''}`.trim() || clerkUser.username || 'Unknown User',
+        email,
+        imageUrl: clerkUser.imageUrl || '',
+    };
+
+    return await User.create(userData);
+}
 
 // Get user data
 export const getUserData = async (req, res) => {
@@ -12,10 +34,7 @@ export const getUserData = async (req, res) => {
         if (!userId) {
             return res.status(401).json({ success: false, message: "Unauthorized" });
         }
-        const user = await User.findOne({ _id: userId }).select('-password');
-        if (!user) {
-            return res.status(404).json({ success: false, message: "User not found" });
-        }
+        const user = await syncUserFromClerk(userId);
         res.json({ success: true, user });
     } catch (error) {
         console.error('getUserData error:', error);
@@ -27,7 +46,12 @@ export const getUserData = async (req, res) => {
 export const userEnrolledCourses = async (req, res) => {
     try {
         const { userId } = getAuth(req);
-        const userData = await User.findOne({ _id: userId }).populate('enrolledCourses');
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const userData = await syncUserFromClerk(userId);
+        await userData.populate('enrolledCourses');
         if (!userData) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
@@ -53,8 +77,7 @@ export const purchaseCourses = async (req, res) => {
             return res.status(401).json({ success: false, message: "Unauthorized: No session found" });
         }
 
-        // Use findOne for the User String ID
-        const userData = await User.findOne({ _id: userId });
+        const userData = await syncUserFromClerk(userId);
         const courseData = await Course.findById(courseId);
 
         // Specific error messages for debugging
@@ -115,6 +138,7 @@ export const updateUserCourseProgress = async (req, res) => {
         if (!userId) {
             return res.status(401).json({ success: false, message: "Unauthorized" });
         }
+        await syncUserFromClerk(userId);
         const { courseId, lectureId } = req.body;
         const progressData = await CourseProgress.findOne({ userId, courseId });
         if (progressData) {
@@ -145,6 +169,7 @@ export const getUserCourseProgress = async (req, res) => {
         if (!userId) {
             return res.status(401).json({ success: false, message: "Unauthorized" });
         }
+        await syncUserFromClerk(userId);
         const { courseId } = req.body || {};
         if (!courseId) {
             return res.json({ success: true, progressData: null });
@@ -167,6 +192,7 @@ export const addUserRating = async (req, res) => {
         return res.status(400).json({ success: false, message: "Invalid input" })
     }
     try {
+        await syncUserFromClerk(userId);
         const courseData = await Course.findById(courseId);
         if (!courseData) {
             return res.status(404).json({ success: false, message: "Course not found" })
