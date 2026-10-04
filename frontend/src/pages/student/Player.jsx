@@ -4,11 +4,73 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { assets } from '../../assets/assets'
 import humanizeDuration from 'humanize-duration'
 import YouTube from 'react-youtube'
+import MuxPlayer from '@mux/mux-player-react'
 import Footer from '../../components/student/Footer'
 import Rating from '../../components/student/Rating'
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import Loading from '../../components/student/Loading'
+
+/**
+ * MuxLecturePlayer
+ * Fetches a short-lived signed JWT from our backend for this specific lecture,
+ * then hands the (playbackId, token) pair to <MuxPlayer>. Without the JWT,
+ * Mux's CDN refuses playback — that's the security guarantee that a leaked
+ * playbackId alone is not enough to watch a paid lecture.
+ */
+const MuxLecturePlayer = ({ lectureId, courseId, backendURL, getToken }) => {
+  const [playback, setPlayback] = useState({ status: 'loading', playbackId: '', token: '', error: '' })
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const authToken = await getToken()
+        const { data } = await axios.get(
+          `${backendURL}/api/mux/playback-token/${lectureId}?courseId=${courseId}`,
+          { headers: { Authorization: `Bearer ${authToken}` } }
+        )
+        if (cancelled) return
+        if (!data.success) throw new Error(data.message || 'Failed to get playback token')
+        setPlayback({ status: 'ready', playbackId: data.playbackId, token: data.token, error: '' })
+      } catch (err) {
+        if (cancelled) return
+        setPlayback({
+          status: 'error',
+          playbackId: '',
+          token: '',
+          error: err?.response?.data?.message || err.message,
+        })
+      }
+    })()
+    return () => { cancelled = true }
+  }, [lectureId, courseId, backendURL, getToken])
+
+  if (playback.status === 'loading') {
+    return (
+      <div className='aspect-video w-full rounded-lg bg-gray-100 flex items-center justify-center text-gray-500'>
+        Loading video…
+      </div>
+    )
+  }
+
+  if (playback.status === 'error') {
+    return (
+      <div className='aspect-video w-full rounded-lg bg-red-50 border border-red-200 flex items-center justify-center text-red-700 p-4 text-center text-sm'>
+        {playback.error}
+      </div>
+    )
+  }
+
+  return (
+    <MuxPlayer
+      playbackId={playback.playbackId}
+      tokens={{ playback: playback.token }}
+      streamType='on-demand'
+      className='aspect-video w-full rounded-lg overflow-hidden'
+    />
+  )
+}
 
 //student can watch the courses they are enrolled in
 const Player = () => {
@@ -218,13 +280,24 @@ const Player = () => {
                             </p>
                           </div>
                           <div className="flex items-center gap-4 text-sm md:text-lg">
-                            {lecture.lectureUrl && !previewUrl && (
+                            {/* Show Watch when the lecture is playable:
+                                - YouTube lectures need a lectureUrl.
+                                - Mux lectures need videoStatus === 'ready'.
+                            */}
+                            {!previewUrl && (
+                              lecture.videoProvider === 'mux'
+                                ? lecture.videoStatus === 'ready'
+                                : !!lecture.lectureUrl
+                            ) && (
                               <p onClick={() => setPlayerData({
-                                ...lecture,chapter:index+1,lecture:i+1
+                                ...lecture, chapter: index + 1, lecture: i + 1
                               })}
                                 className="text-blue-600 font-bold cursor-pointer hover:underline">
                                 Watch
                               </p>
+                            )}
+                            {!previewUrl && lecture.videoProvider === 'mux' && lecture.videoStatus !== 'ready' && (
+                              <span className='text-xs text-gray-400 italic'>Processing…</span>
                             )}
                             <span className="text-gray-500">
                               {humanizeDuration(
@@ -254,12 +327,23 @@ const Player = () => {
 
         <div className='md:mt-10'>
           {playerData?(<div>
-            {(playerData.lectureUrl?.includes('youtube.com') || playerData.lectureUrl?.includes('youtu.be')) ? (
+            {/* Three playback paths:
+                1. Mux lecture -> signed MuxPlayer (paid content).
+                2. YouTube URL -> YouTube component (legacy / free content).
+                3. Anything else (e.g. a raw preview URL) -> plain <video>. */}
+            {playerData.videoProvider === 'mux' ? (
+              <MuxLecturePlayer
+                lectureId={playerData.lectureId}
+                courseId={courseId}
+                backendURL={backendURL}
+                getToken={getToken}
+              />
+            ) : (playerData.lectureUrl?.includes('youtube.com') || playerData.lectureUrl?.includes('youtu.be')) ? (
               <YouTube videoId={getYouTubeVideoId(playerData.lectureUrl)}  iframeClassName='aspect-video w-full' />
             ) : (
-              <video 
-                src={playerData.lectureUrl} 
-                controls 
+              <video
+                src={playerData.lectureUrl}
+                controls
                 className='aspect-video w-full rounded-lg'
                 controlsList="nodownload"
               >

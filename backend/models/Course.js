@@ -2,13 +2,37 @@ import express from 'express'
 import mongoose from 'mongoose'
 
 const lectureSchema = new mongoose.Schema({
-    lectureId:{type :String , required : true},
-    lectureTitle:{type :String , required : true},
-    lectureDuration:{type :Number , required : true},
-    lectureUrl:{type :String , required : true},
-    isPreviewFree:{type :Boolean , required : true},
-    lectureOrder:{type :Number , required : true},
-},{_id : false})
+    lectureId:      { type: String,  required: true },
+    lectureTitle:   { type: String,  required: true },
+    lectureOrder:   { type: Number,  required: true },
+    isPreviewFree:  { type: Boolean, required: true },
+
+    // duration is now filled in by the Mux webhook (was: required)
+    lectureDuration:{ type: Number,  default: 0 },
+
+    // --- video source ---
+    videoProvider: {
+        type: String,
+        enum: ['youtube', 'mux'],
+        default: 'mux',
+        required: true
+    },
+
+    // used only when videoProvider === 'youtube' (legacy courses)
+    lectureUrl:     { type: String, default: '' },
+
+    // used only when videoProvider === 'mux'
+    muxUploadId:    { type: String, default: '' },   // known first, from create-upload
+    muxAssetId:     { type: String, default: '' },   // filled in by asset_created webhook
+    muxPlaybackId:  { type: String, default: '' },   // filled in by asset_ready webhook
+
+    videoStatus: {
+        type: String,
+        enum: ['pending', 'uploading', 'processing', 'ready', 'errored'],
+        default: 'pending'
+    },
+    videoError:     { type: String, default: '' }
+}, { _id: false })
 
 const chapterSchema = new mongoose.Schema({
     chapterId:{type:String,required : true},

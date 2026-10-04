@@ -4,11 +4,13 @@ import express from 'express'
 import cors from 'cors'
 import connectDB from './configs/mongodb.js'
 import { clerkWebhooks, stripeWebhooks } from './controllers/webhooks.js'
+import { muxWebhook } from './controllers/muxController.js'
 import educatorRouter from './routes/educatorRoutes.js'
 import { clerkMiddleware, getAuth } from '@clerk/express'
 import connectCloudinary from './configs/cloudinary.js'
 import courseRouter from './routes/courseRoute.js'
 import userRouter from './routes/userRoutes.js'
+import muxRouter from './routes/muxRoutes.js'
 
 const app = express()
 
@@ -17,6 +19,7 @@ app.use(cors())
 
 // Stripe webhook needs the raw body to verify the signature so parese before other middlewares since it has secret key verification(encrptying )
 app.post('/stripe',express.raw({type:'application/json'}),stripeWebhooks)
+app.post('/mux-webhook', express.raw({ type: 'application/json' }), muxWebhook)
 
 app.use(express.json()) // Must be global
 app.use(clerkMiddleware()) // Must come after json
@@ -35,6 +38,7 @@ app.get('/', (req, res) => res.send('API is running'))
 app.post('/clerk', express.json(),clerkWebhooks)
 
 // Simplified Routes
+app.use('/api/mux', express.json(), muxRouter)
 app.use('/api/educator',express.json(), educatorRouter)
 app.use('/api/course',express.json(), courseRouter)
 app.use('/api/user',express.json(), userRouter)

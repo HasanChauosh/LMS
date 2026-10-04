@@ -3,6 +3,7 @@ import Course from '../models/Course.js'
 import {v2 as cloudinary} from 'cloudinary'
 import {Purchase} from '../models/Purchase.js'
 import User from '../models/User.js'
+import { reconcileMuxLecture } from './muxController.js'
 
 
 //update role to educator
@@ -43,6 +44,23 @@ export const addCourse = async (req, res) => {
 
         // 3. Now create the course with all required fields present
         const newCourse = await Course.create(parsedCourseData)
+
+        // 4. Reconcile Mux lectures — closes the race where webhooks fire
+        //    BEFORE the course exists in the DB. We query Mux directly for
+        //    each mux lecture's current asset state and patch the DB now.
+        //    We await this so the response returns fresh data.
+        const muxUploadIds = []
+        for (const chapter of parsedCourseData.courseContent || []) {
+            for (const lecture of chapter.chapterContent || []) {
+                if (lecture.videoProvider === 'mux' && lecture.muxUploadId) {
+                    muxUploadIds.push(lecture.muxUploadId)
+                }
+            }
+        }
+        if (muxUploadIds.length) {
+            const results = await Promise.all(muxUploadIds.map(id => reconcileMuxLecture(id)))
+            console.log('[MUX RECONCILE after addCourse]', results)
+        }
 
         return res.json({ success: true, message: "Course added successfully", course: newCourse })
 
